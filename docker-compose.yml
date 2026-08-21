@@ -1,0 +1,93 @@
+version: '3.8'
+services:
+    mongo1:
+        image: 'mongo:7.0'
+        container_name: mongo1
+        command:
+            - mongod
+            - '--replSet'
+            - rs0
+            - '--bind_ip_all'
+        ports:
+            - '27017:27017'
+        volumes:
+            - 'mongo1_data:/data/db'
+        networks:
+            - mongo-cluster
+    mongo2:
+        image: 'mongo:7.0'
+        container_name: mongo2
+        command:
+            - mongod
+            - '--replSet'
+            - rs0
+            - '--bind_ip_all'
+        ports:
+            - '27018:27017'
+        volumes:
+            - 'mongo2_data:/data/db'
+        networks:
+            - mongo-cluster
+    mongo3:
+        image: 'mongo:7.0'
+        container_name: mongo3
+        command:
+            - mongod
+            - '--replSet'
+            - rs0
+            - '--bind_ip_all'
+        ports:
+            - '27019:27017'
+        volumes:
+            - 'mongo3_data:/data/db'
+        networks:
+            - mongo-cluster
+    mongo-init:
+        image: 'mongo:7.0'
+        container_name: mongo-init
+        depends_on:
+            - mongo1
+            - mongo2
+            - mongo3
+        networks:
+            - mongo-cluster
+        entrypoint:
+            - bash
+            - '-c'
+            - 'sleep 5 && mongosh --host mongo1:27017 --eval ''rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo1:27017", priority: 2}, {_id: 1, host: "mongo2:27017", priority: 1}, {_id: 2, host: "mongo3:27017", priority: 1}]})'''
+    mysql:
+        image: 'mysql:8.4'
+        ports:
+            - '${FORWARD_DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 1
+            MYSQL_EXTRA_OPTIONS: '${MYSQL_EXTRA_OPTIONS:-}'
+        volumes:
+            - 'sail-mysql:/var/lib/mysql'
+            - './docker/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+        networks:
+            - sail
+        healthcheck:
+            test:
+                - CMD
+                - mysqladmin
+                - ping
+                - '-p${DB_PASSWORD}'
+            retries: 3
+            timeout: 5s
+networks:
+    mongo-cluster:
+        driver: bridge
+    sail:
+        driver: bridge
+volumes:
+    mongo1_data: null
+    mongo2_data: null
+    mongo3_data: null
+    sail-mysql:
+        driver: local
